@@ -1,0 +1,16 @@
+{
+    "name": "Rust Environment",
+    "build": {
+      "dockerfile": "Dockerfile"
+    },
+    "settings": { 
+      "terminal.integrated.shell.linux": "/bin/bash"
+    },
+    "extensions": [
+      "rust-lang.rust"
+    ],
+    "forwardPorts": [],
+    "postCreateCommand": "rustup update && rustup component add rls rust-analysis rust-src",
+    "remoteUser": "root"
+  }
+  
