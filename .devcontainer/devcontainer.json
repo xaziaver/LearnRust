@@ -6,7 +6,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "rust-analyzer.rust"
+        "rust-lang.rust-analyzer"
       ]
     }
   },
