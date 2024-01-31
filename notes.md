@@ -1,11 +1,16 @@
 
-### Run after codespace is built
+### Run After Container is Built
 
+# access token
 export GITHUB_TOKEN=$PERSONAL_TOKEN_SECRET
 
+# rustlings submodule
+cd rustlings
+cargo install --force --path .
 
-### Adding Fork as a Submodule
+### Miscellaneous
 
+## Adding Fork as a Submodule
 1. **Add Fork as a Submodule**:
    - In your main repository, add the fork as a submodule to include it as part of your project.
    - Command: `git submodule add <url-of-your-fork> path/to/submodule`
