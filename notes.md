@@ -8,9 +8,19 @@ export GITHUB_TOKEN=$PERSONAL_TOKEN_SECRET
 cd rustlings
 cargo install --force --path .
 
-### Miscellaneous
+### Rust Key Concepts
 
-## Adding Fork as a Submodule
+## Ownership
+A discipline for ensuring the safety of Rust programs.
+
+## References and Borrowing
+
+## Permissions
+
+
+### git Miscellaneous
+
+## Adding Fork as a Submodule and Making Commits
 1. **Add Fork as a Submodule**:
    - In your main repository, add the fork as a submodule to include it as part of your project.
    - Command: `git submodule add <url-of-your-fork> path/to/submodule`
@@ -30,4 +40,3 @@ cargo install --force --path .
    - `git add path/to/submodule`
    - `git commit -m "Update submodule reference"`
    - `git push`
-
