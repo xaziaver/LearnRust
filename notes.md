@@ -1,4 +1,3 @@
-
 # Run After Container is Built
 
 ## access token
@@ -12,10 +11,13 @@
 
 # Rust Key Concepts
 
-## Ownership
-A discipline for ensuring the safety of Rust programs.
-
-Enables Rust to make memory safety safety guarantees without needing a garbage collector
+## <div align="center">Ownership</div>
+### Summary
+Ownership is primarily a discipline of heap management:
+ - All heap data must be owned by exactly one variable.
+ - Rust deallocates heap data once its owner goes out of scope.
+ - Ownership can be transferred by moves, which happen on assignments and function calls.
+ - Heap data can only be accessed through its current owner, not a previous owner.
 
 ### What makes a Rust program safe/unsafe?
 one way to think about safety is as the absence of undefined behavior
@@ -54,6 +56,7 @@ Some `behavior` **will happen, but it is `undefined`:
  - The code executes without crashing, until a malicious actor creates the right input to delete your 
    production database, overwrite your backups, or otherwise cause problems
 
+##
 ## ***A foundational goal of Rust is to ensure that your programs never have undefined behavior.***
 
 About 70% of reported security vulnerabilities in low-level systems are caused by memory corruption, which is one form of undefined behavior.
@@ -62,7 +65,7 @@ A secondary goal of Rust is to prevent undefined behavior at compile-time instea
 1. Catching bugs at compile-time means avoiding those bugs in production, improving the reliability of your software.
 2. Catching bugs at compile-time means fewer runtime checks for those bugs, improving the performance of your software.
 
-## Ownership as a Discipline for Memory Safety
+### Ownership as a Discipline for Memory Safety
 Ownership is about safety which is the absence of undefined behavior The Rust Reference maintains a large list of ["Behavior considered undefined"](https://doc.rust-lang.org/reference/behavior-considered-undefined.html) a main category being operations on memory.
 
 There are many ways to think about memory - the RAM in your computer, an array of bytes, the pointers you get back from `malloc`. Those are *valid*, but not *useful* ways to think about how Rust works. 
@@ -87,16 +90,36 @@ fn plus_one(x: i32) -> i32 {
 - The frame for `main` at L3 holds `n = 5; y = 6`
 
 Frames are organized into a **stack** of currently-called-functions. At L2, the frame for `main` sits above the frame for the called function `plus_one`.
-![Alt text](../notes_img/frame_stack_0.png "stack of frames")
-After a function returns or a scope ends, Rust **deallocates** the function's or scope's frame (also called **freeing** or **dropping**)
+
+![](notes_imgs/frame_stack_0.png "stack of frames")
+
+ - In this example when the function is called, `n` gets its value copied from its slot in the `main` frame to a new slot in the `plus_one` frame.
+ - At L2, the frame for `main` sits above the frame for `plus_one` and at L3, the called function's frame is gone.
+
+After a function returns or a scope ends, Rust **deallocates** the function's or scope's frame (also called **freeing** or **dropping**).
+
+### Boxes Live in the Heap
+Copying data as in the previous example is not always ideal as it can take up a lot of memory. For example, the following copies an array with 1 million elements which causes the `main` frame to contain 2 million elements:
+
+![](notes_imgs/frame_stack_1.png "2 million elements")
+
+To transfer access to data without copying it, Rust uses **pointers** which is a value that describes a location in memory. One common way to make a pointer is to allocate memory in the **heap** - a separate region of memory not tied to a stack frame where data can live indefinitely:
+
+![](notes_imgs/stack_heap_0.png "copy pointer")
+
+`a` and `b` here are pointers and the statement `let b = a` copies the pointer from `a` to `b`. Notice `a` has been grayed out because it has been *moved*.
+
+### Rust Does Not Permit Manual Memory Management
+
+### A Box's Owner Manages Deallocation
+
+### Variables Cannot Be Used After Being Moved
 
 
 
-
-
-## References and Borrowing
-
-## Permissions
+##
+## <div align="center">References, Borrowing and Permissions</div>
+### Summary
 
 
 # git Miscellaneous
