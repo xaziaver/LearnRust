@@ -87,8 +87,8 @@ fn plus_one(x: i32) -> i32 {
 - The frame for `main` at L3 holds `n = 5; y = 6`
 
 Frames are organized into a **stack** of currently-called-functions. At L2, the frame for `main` sits above the frame for the called function `plus_one`.
-
-After a function returns, Rust **deallocates** the function's frame (also called **freeing** or **dropping**)
+![Alt text](../notes_img/frame_stack_0.png "stack of frames")
+After a function returns or a scope ends, Rust **deallocates** the function's or scope's frame (also called **freeing** or **dropping**)
 
 
 
