@@ -6,7 +6,6 @@ This repository is meant to hold notes, exercises and projects created while lea
 - [rustlings](https://github.com/rust-lang/rustlings) by rust-lang which is a project containing code challenges meant to demonstrate and practice the concepts introduced by The Book
 
 
-
 # Run After Container is Built
 
 ## access token

@@ -1,14 +1,3 @@
-# Run After Container is Built
-
-## access token
-`export GITHUB_TOKEN=$PERSONAL_TOKEN_SECRET`
-
-## rustlings submodule
-`cd rustlings`
-
-`cargo install --force --path .`
-
-
 # Rust Key Concepts
 
 ## <div align="center">Ownership</div>
@@ -105,7 +94,7 @@ Copying data as in the previous example is not always ideal as it can take up a 
 
 To transfer access to data without copying it, Rust uses **pointers** which is a value that describes a location in memory. One common way to make a pointer is to allocate memory in the **heap** - a separate region of memory not tied to a stack frame where data can live indefinitely:
 
-`a` and `b` here are pointers and the statement `let b = a` copies the pointer from `a` to `b`. Notice `a` has been grayed out because it has been *moved*.
+`a` and `b` in the code on the right are pointers and the statement `let b = a` copies the pointer from `a` to `b`. Notice `a` has been grayed out because it has been *moved*.
 
 ### Rust Does Not Permit Manual Memory Management
 Allocating and deallocating memory is handled by Rust. *Stack* data is automatically managed by Rust - when a function is called a stack frame is initalized and when it ends the stack frame is deallocated. 
@@ -172,32 +161,24 @@ This code would not compile because `first` points to deallocated memory after c
 
 ***Moved heap data principle: if a variable `x` moves ownership of heap data to another variable `y`, then `x` cannot be used after the move.***
 
-One way to avoid moving data is to *clone* it using the `.clone()` method. Instead of passing in `first` itself above, we can pass `first.clone()` which will do a *deep* copy rather than a *shallow* copy of `first` by copying the string data into a new heap allocation.
+One way to avoid moving box data is to *clone* it using the `.clone()` method. Instead of passing in `first` itself above, we can pass `first.clone()` which will do a *deep* copy rather than a *shallow* copy of `first` by copying the string data into a new heap allocation. The data is copied similarly as to a non-box type variable where the original variable still works because it has ownership of its data.
 
 ##
 ## <div align="center">References, Borrowing and Permissions</div>
 ### Summary
+References provide the ability to read and write data without consuming owernership of it. They are created with *borrows* (`&` and `&mut`) and used with *deferences* (`*`), often implicitly.
 
+However, references can be easily misused. Rust's borrow checker enforces a system of permissions that ensures references are used safely:
+ - All variables can *read* (R), *own* (O), and (optionally) *write* (W) their data.
+ - Creating a reference will *transfer permissions* from the borrowed *path* to the reference.
+ - Permissions are returned once the reference's lifetime has ended.
+ - Data must *outlive* all references that point to it.
 
-# git Miscellaneous
-
-## Adding Fork as a Submodule and Making Commits
-1. **Add Fork as a Submodule**:
-   - In your main repository, add the fork as a submodule to include it as part of your project.
-   - Command: `git submodule add <url-of-your-fork> path/to/submodule`
-
-2. **Initialize and Update Submodule After Cloning**:
-   - To initialize and pull changes from your fork to the submodule after cloning 
-     - `git submodule init`
-     - `git submodule update`
-
-3. **Committing Changes Within the Submodule**:
-   - Navigate to the submodule directory: `cd path/to/submodule`
-   - Add and commit your changes: `git add .` and `git commit -m "Your message"`
-   - Push changes to your fork: `git push`
-
-4. **Updating Submodule Reference in Main Repository**:
-   - After making changes in the submodule (fork), update the reference in your main repository.
-   - `git add path/to/submodule`
-   - `git commit -m "Update submodule reference"`
-   - `git push`
+### References are Non-Owning Pointers
+### Dereferencing a Pointer Accesses Its Data
+### Rust Avoids Simultaneous Aliasing and Mutation
+### References Change Permissions on Paths
+### The Borrow Checker Finds Permission Violations
+### Mutable References Provide Unique and Non-Owning Access to Data
+### Permissions Are Returned At The End of a Reference's Lifetime
+### Data Must Outlive All of Its References
