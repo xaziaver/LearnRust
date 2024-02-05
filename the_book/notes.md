@@ -175,7 +175,77 @@ However, references can be easily misused. Rust's borrow checker enforces a syst
  - Data must *outlive* all references that point to it.
 
 ### References are Non-Owning Pointers
+Move-only APIs can be inconvenient - for example if we pass ownership of data and try to use again:
+
+```Rust
+fn main() {
+    let m1 = String::from("Hello");
+    let m2 = String::from("World");
+    greet(m1, m2);  // L2
+    let s = format!("{} {}", m1, m2);  // L3 --> Error occurs here
+}
+
+fn greet(g1: String, g2: String) {
+    println!("{} {}!", g1, g2);  // L1
+```
+![](notes_imgs/stack_heap_2.png "pointee was freed")
+
+Calling `greet()` in this way passes ownership and thus `m1` and `m2` point to freed data at the time `format!()` is called
+
+A **reference** is a (**non-owning**) pointer that allows our desired behavior:
+```Rust
+fn main() {
+    let m1 = String::from("Hello");
+    let m2 = String::from("World");  // L1
+    greet(&m1, &m2);                 // L3 (note the ampersands)
+    let s = format!("{} {}", m1, m2);
+
+fn greet(g1: &String, g2: &String) {  // (note the ampersands)
+    // L2
+    println!("{} {}!", g1, g2);
+}
+```
+![](notes_imgs/stack_heap_3.png "use references instead")
+
+The expression `&m1` uses the ampersand operator to create a reference to (or *borrow*) `m1`. So now, `g1` and `g2` point to `m1` and `m2` on the stack which point to the string data on the heap. When the frame for `g1` and `g2` ends, in this version they no longer own the heap data and thus is not deallocated.
+
 ### Dereferencing a Pointer Accesses Its Data
+Rust "follows" a pointer to its data through the ***deference*** operator written with an asterisk `*`:
+```Rust
+let mut x: Box<i32> = Box::new(1);
+let a: i32 = *x;    // *x reads the heap value, so a = 1
+*x += 1;            // *x on the left modifies heap value,
+                    // so x points to the value 2
+
+let r1: &Box<i32> = &x;    // r1 points to x on the stack
+let b: i32 = **r1;         // *r1 gets the pointer x
+                           // **r1 gets the value pointed to by x
+
+let r2: &i32 = &*x;    // r2 is a reference to the value pointed to by x
+                       // so it points to the heap value directly
+let c: i32 = *r2;      // only 1 dereference is needed to get the value
+```
+![](notes_imgs/pointers_0.png "dereferencing examples")
+
+However, in Rust you probably won't see these explicitly written as often because Rust will implicitly insert reference and dereference operators in certain cases. The following example shows equivalent ways of calling the `i32::abs` and `str::len ' functions:
+
+```Rust
+let x: Box<i32> = Box::new(-1);
+let x_abs1 = i32::abs(*x); // explicit dereference
+let x_abs2 = x.abs();      // implicit dereference
+assert_eq!(x_abs1, x_abs2);
+
+let r: &Box<i32> = &x;
+let r_abs1 = i32::abs(**r); // explicit dereference (twice)
+let r_abs2 = r.abs();       // implicit dereference (twice)
+assert_eq!(r_abs1, r_abs2);
+
+let s = String::from("Hello");
+let s_len1 = str::len(&s); // explicit reference
+let s_len2 = s.len();      // implicit reference
+assert_eq!(s_len1, s_len2);
+```
+
 ### Rust Avoids Simultaneous Aliasing and Mutation
 ### References Change Permissions on Paths
 ### The Borrow Checker Finds Permission Violations
