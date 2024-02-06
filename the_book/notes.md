@@ -256,9 +256,47 @@ These conversions are handled with method calls and some marcros like `println!(
 This is a good summary of what references are and how they are used, but we should now discuss how Rust ensures they are safely used
 
 ### Rust Avoids Simultaneous Aliasing and Mutation
+Pointers are powerful because they enable **aliasing**, but also dangerous when combined with **mutation**:
+ - by deallocating the aliased data, leaving the initial variable to point to invaid memory
+ - by mutating the aliased data, invalidating runtime properties expected by some other variable
+ - by *concurrently* mutating the alizsed data, causing a data race with nondeterministic behavior
 
+ Let's demonstrate with programs using vectors like this:
+ ```Rust
+ let mut v: Vec<i32> = vec![1, 2, 3];    // L1
+ v.push(4)                               // L2
+ ```
+ ![](notes_imgs/pointers_1.png "`Vec` internals")
+
+This shows the `Vec` data structure and how it is affected by `Vec::push`. 
+
+The macro `vec!` creates a vector with elements between `[]` with the annotated type `<i32>`. Vectors have a variable length which is related to its data structure - `v` allocates a heap array of a certain *capacity*.
+
+In **L1** we can see `v` has a capacity `cap` of 3 and we can see its length `len` is at 3 as well.  
+
+In **L2** we see after the `push` the `cap` has increased to 6 and `len` is now 4 with the additional value pushed to the end
+
+To tie back to memory safety:
+```Rust
+let mut v: Vec<i32> = v![1, 2, 3];
+let num: &i32 = &v[2];
+v.push(4);
+println!("Third element is: {}", *num);
+```
+
+This code will not compile because there is a safety issue when `*num` is attempting to be used, but `num` is pointing to invalid data. When we use `push` as in the previous example, the vector's heap data is invalidated and `v[2]`, which `num` points to is essentially copied to a new location on the heap.
+
+In more abstract terms, the issue is that the vector `v` is both *aliased* and *mutated*. To avoid issues of this type, Rust follows this principle:
+
+***Pointer Safety Principle: data should never be aliased and mutated at the same time.***
+
+For example, Rust enforces this principle for boxes (*owned* pointers) by disallowing aliasing - reassigning a box variable will move ownership and invalidates the previous variable
+
+Since references are *non-owning* pointers, Rust needs a different way to ensure safety through the *Pointer Safety Principle* and does so through the **borrow checker**. A key thing to keep in mind is that references are meant to create temporary aliases.
 
 ### References Change Permissions on Paths
+
+
 ### The Borrow Checker Finds Permission Violations
 ### Mutable References Provide Unique and Non-Owning Access to Data
 ### Permissions Are Returned At The End of a Reference's Lifetime
