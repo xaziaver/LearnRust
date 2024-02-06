@@ -414,3 +414,169 @@ fn main() {
 This program is unsafe if `first_or` allows `default` to *flow* into the return value, since the drop could invalidate `s`. Since from the function signature Rust cannot be certain something like this won't happen, `default` (and `&strings[]`) do not have <span style="color:green; font-weight:bold;">F</span> permissions.
 
 We *can* specify whether these input/output references can be returned and used... Rust provides a mechanism called *lifetime parameters* to help with validating in these cases.
+
+##
+## <div align="center">Fixing Ownership Errors</div>
+### Summary
+Focus one of the answers to the question "is my program unsafe?"
+    1. Yes --> understand the root cause of the unsafety
+    2. No --> understand the limitations of the borrow checker to work around
+
+### UNSAFE: Returning a Reference to the Stack
+```Rust
+fn return_a_string() -> &String {
+    let s = String::from("Hello world");
+    &s
+}
+```
+- unsafe because of the lifetime of the referred data
+- four ways to extend the lifetime of the string
+    1. move ownership of string out of function, `&String` to `String`
+    ```Rust
+    fn return_a_string() -> String {
+        let s = String::from("Hello world");
+        s
+    }
+    ```
+
+    2. return a string literal (lives forever indicated by `'static`)
+    ```Rust
+    fn return_a_string() -> &'static str {
+        "Hello world"
+    }
+    ```
+    where a heap allocation is unnecessary because we never intend to change the string
+
+    3. defer borrow-checking to runtime by using garbase collection
+    ```Rust
+    use std::rc::Rc;
+    fn return_a_string() -> Rc<String> {
+        let s = Rc::new(String::from("Hello world"));
+        Rc::clone(&s)
+    }
+    ```
+    using a **reference-counted pointer**... `Rc<t>` is the Reference Counted Smart Pointer. In short `Rc::clone` only clones a pointer to `s` and not the data itself. At runtime `Rc` checks when the last `Rc` pointing to data has been dropped, and then deallocates the data.
+
+    4. make the caller provide a "slot" to put the string using a mutable reference:
+    ```Rust
+    fn return_a_string(output: &mut String) {
+        output.replace_range(.., "Hello world");
+    }
+    ```
+    here the caller is responsible for creating space for the string and they can carefully can control when allocations occurring using this approach.
+- which approach requires you to answer: How long should my string live? Who should be in charge of deallocating it?
+
+### UNSAFE: Not Enough Permissions
+```Rust
+fn stringify_name_with_title(name: &Vec<String>) -> String {
+    name.push(String::from("Esq."));
+    let full = name.join(" ");
+    full
+}
+// ideally: ["Ferris", "Jr"] => "Ferris Jr. Esq."
+```
+- rejected by the borrow checker because `name` is an immutable reference, but `name.push(..)` requires the <span style="color:blue; font-weight:bold;">W</span> permission
+- unsafe because `push` could invalidate other references to `name` outside of the function
+- different approaches to fix:
+    1. change type of name from `&Vec<String>` to `&mut Vec<String>`
+    ```Rust
+    fn stringify_name_with_title(name: &mut Vec<String>) -> String {
+        name.push(String::from("Esq."));
+        let full = name.join(" ");
+        full
+    }
+    ```
+    but this is not good practice because **functions should NOT mutate their inputs if the caller would not expect it**. A person calling this function probably would not expect their input to be modified.
+
+    2. take ownership of the name by changing `&Vec<String>` to `Vec<String>`
+    ```Rust
+    fn stringify_name_with_title(mut name: Vec<String>) -> String {
+        name.push(String::from("Esq."));
+        let full = name.join(" ");
+        full
+    }
+    ```
+    this is also not good practice.. **It is very rare for Rust functions to take ownership of heap-owning data structures like `Vec` and `String`**. This version would make the input `name` unusable which is not ideal for the caller in most cases.
+
+    3. original choice of `&Vec` is actually good since we do *not* want the input to change, but the body needs to change in order to get compilation:
+    ```Rust
+    fn stringify_name_with_title(name: &Vec<String>) -> String {
+        let mut name_clone = name.clone();
+        name_clone.push(String::from("Esq."));
+        let full = name_clone.join(" ");
+        full
+    }
+    ```
+    this allows mutation of the local copy of the input vector, but clone copies every string in the input so we can avoid unnecessary copies (more efficient) by adding the suffix later:
+    ```Rust
+    fn stringify_name_with_title(name: &Vec<String>) -> String {
+        let mut full = name.join(" ");
+        full.push_str(" Esq.");
+        full
+    }
+    ```
+    which works because `slice::join` already copies the data in `name` into the string `full`.
+- In general, writing Rust functions is a careful balance of asking for the *right* level of permissions. Here, is it most idiomatic to only expect the read permission on `name`.
+
+
+### UNSAFE: Aliasing and Mutating a Data Structure
+```Rust
+fn add_big_string(dst: &mut Vec<String>, src: &[String]) {
+    
+    // uses iterators and closure to succinctly 
+    // find a reference to the largest string
+    let largest: &String = 
+        dst.iter().max_by_key(|s| s.len()).unwrap();
+    
+    for s in src {
+        if s.len() > largest.len() {
+            dst.push(s.clone());
+        }
+    }
+}
+```
+- rejected by the borrow checker because `let largest = ...` removes the <span style="color:blue; font-weight:bold;">W</span> permissions on `dst`, but `dst.push(..)` requires that permission.
+- unsafe because `dst.push()` could deallocate the contents of `dst`, invalidating the reference `largest`
+- to fix key insight is we need to shorten the lifetime of `largest` to not overlap with `dst.push()..`:
+    1. clone `largest`:
+    ```Rust
+    fn add_big_strings(dst: &mut Vec<String>, src: &[String]) {
+        let largest: String = dst.iter().max_by_key(|s| s.len()).unwrap().clone();
+        for s in src {
+            if s.len() > largest.len() {
+                dst.push(s.clone());
+            }
+        }
+    }
+    ```
+    however this may cause a performance hit for allocating and copying the string data
+    2. perform all the legnth comparisons first, and then mutate `dst` afterwards:
+    ```Rust
+    fn add_big_strings(dst: &mut Vec<String>, src: &[String]) {
+        let largest: &String = dst.iter().max_by_key(|s| s.len()).unwrap();
+        let to_add: Vec<String> = 
+            src.iter().filter(|s| s.len > largest.len()).cloned().collect();
+        dst.extend(to_add);
+    }
+    ```
+    but this also causes a performance hit for allocating the vector `to_add`
+    3. copy out the length of `largest`, since we don't need the contents of `largest`, just the its length
+    ```Rust
+    fn add_big_strings(dst: &mut Vec<String>, src: &[String]) {
+        let largest_len: usize = dst.iter().max_by_key(|s| s.len()).unwrap().len();
+        for s in src {
+            if s.len() > largest_len {
+                dst.push(s.clone());
+            }
+        }
+    }
+    ```
+    this is arguably the most idiomatic and the most performant
+- all solutions share the common idea: shorten the lifetime of borrows on `dst` to not overlap with a mutation to `dst`
+
+### UNSAFE: Copying vs. Moving Out of a Collection
+
+### SAFE: Mutating Different Tuple Fields
+
+### SAFE: Mutating Different Array Elements
+
