@@ -295,9 +295,122 @@ For example, Rust enforces this principle for boxes (*owned* pointers) by disall
 Since references are *non-owning* pointers, Rust needs a different way to ensure safety through the *Pointer Safety Principle* and does so through the **borrow checker**. A key thing to keep in mind is that references are meant to create temporary aliases.
 
 ### References Change Permissions on Paths
+The core idea behind the borrow checker is that variables have three kinds of **permissions** on their data
+<ul>
+ <li><strong>Read</strong> (<span style="color:yellow; font-weight:bold;">R</span>): data can be copied to another location</li>
+ <li><strong>Write</strong> (<span style="color:blue; font-weight:bold;">W</span>): data can be mutated in place</li>
+ <li><strong>Own</strong> (<span style="color:red; font-weight:bold;">O</span>): data can be moved or dropped</li>
+</ul>
 
+These permissions only exist within the compiler and represents a way it "thinks" about your program before it is executed
+
+By default, a variable has read/own permissions (<span style="color:yellow; font-weight:bold;">R</span><span style="color:red; font-weight:bold;">O</span>) on its data, and additionally write permissions (<span style="color:blue; font-weight:bold;">W</span>) if it is declared with `let mut`. The key idea is that **references can temporarily remove these permissions."
+
+To illustrate, look at this safe version of the previous exmaple above:
+
+ ![](notes_imgs/permissions_0.png "show permissions")
+1. `v` is initialized with `let mut` and so it gains Read, Write, and Own permissions
+2. `let num = &v[2]`, causes `v` to be borrowed by `num`, this:
+    - removes Write and Own permissions from `v`, but it still had Read
+    - `num` gains Read and Own permissions, but not Write because it was not declared with `mut`
+    - the **path** `*num` has gained the Read permission
+3. after the `println!()` line, `num` is no longer in use, so `v` is no longer borrowed, so:
+    - `v` regains Write and Own permissions
+    - num` and `*num` have lost all of their permissions
+4. after the `v.push(4)` line, `v` is no longer in user and loses all of its permissions
+
+An important nuance here is both `num` and `*num` have their own set of permissions because it's different to access data through a reference than to manipulate the reference itself. Permissions are defined on **paths** and not just variables. A path is anything you can put on the left-hand side of an assignment:
+ - variables, `t`
+ - dereferences of paths, `*a`
+ - array accesses of paths, a[0]
+ - fields of paths, `a.0` for tuples `a.field` for structs
+ - any combination of the above, `*((*a)[0].1)`
+
+ Another important point to make is that *paths lose permissions when they are no longer used*. This is because some permissions are mutually exclusive. For example, if `num = &v[2]`, then `v` cannot be mutated (Write) or dropped (Own) while `num` is still used within the scope. However, after the last time using `num` Rust will return the permissions and those actions are again allowed for `v`.
 
 ### The Borrow Checker Finds Permission Violations
+The **borrow checker** looks for potentially unsafe operations involving references. Any time a path is used, Rust expects that path to have certain permissions depending on the operation. For example, the borrow `&v[2]` requires that `v` is readable, but by contrast `v.push(4)` requires that `v` is both readable and writable.
+
 ### Mutable References Provide Unique and Non-Owning Access to Data
+We have seen **immutable references** (also called **shared references**) so far which permit aliasing, but disallow mutation.
+
+There also exists in Rust the ability to temporarily provide mutable access to data without moving it through **mutable references** (also called **unique references**). Here is an example showing the permission changes for this type of reference:
+ ![](notes_imgs/permissions_1.png "mutable reference permissions")
+
+ Compared to immutable references a mutable reference, created with the `&mut` operator, you can see two important differences in permissions:
+ 1. When `num` was an immutable reference, `v` still had the <span style="color:yellow; font-weight:bold;">R</span> permission. Now that `num` is a mutable reference, `v` has lost *all* permissions while `num` is in use
+ 2. When `num` was an immutable reference, the path `*num` only had the <span style="color:yellow; font-weight:bold;">R</span> permission. Now that `num` is a mutable reference, `*num` has also gained the <span style="color:blue; font-weight:bold;">W</span> permission
+
 ### Permissions Are Returned At The End of a Reference's Lifetime
+We have talked before about a reference being "in use" and that phrase is describing a reference's **lifetime** - the range of code spanning from A (where the reference is created) to B (the last time(s) the reference is used).
+
+ ![](notes_imgs/permissions_2.png "reference lifetime")
+
+The lifetime of `y` starts on the second line and ends on the third and the <span style="color:blue; font-weight:bold;">W</span> permission is returned to `x` at that time. 
+
+Keep in mind that a variable may have different lifetimes depending on control flow results. 
+
+```Rust
+fn ascii_capitalize(v: &mut Vec<char>) {
+    let c = &v[0];
+
+    if c.is_ascii_lowercase() {
+        let up = c.to_ascii_uppercase();
+
+        v[0] = up;
+    } else {
+
+        println!("Already capitalized: {:?}, v);
+    }
+}
+```
+We can see `c`'s lifetime ends in different places depending on the result of the condition and so the permissions will vary.
+
 ### Data Must Outlive All of Its References
+As a part of the *Pointer Safety Principle*, the borrow checker enforces that **data must outlive any references to it**. Rust enforces this property in two ways:
+1. When references are created and dropped within the scope of a single function
+ - Rust catches errors using the permissions we've already discussed
+ - This is the case when Rust *knows* how long a reference lives
+2. When references are used as input to or output from a function
+ - Rust catches errors using the Flow <span style="color:green; font-weight:bold;">F</span> permission
+ - This is the case when Rust *does not know* how long a reference lives
+
+```Rust
+fn first(strings: &Vec<String>) -> &String {
+    let s_ref = &strings[0]
+    s_ref
+}
+```
+
+On both lines of the function, the Flow (<span style="color:green; font-weight:bold;">F</span>) permission is expected. Unlike <span style="color:yellow; font-weight:bold;">R</span><span style="color:blue; font-weight:bold;">W</span><span style="color:red; font-weight:bold;">O</span> permissions, <span style="color:green; font-weight:bold;">F</span> does not change throughout the body of a function.
+
+A reference has the <span style="color:green; font-weight:bold;">F</span> permission if it's allowed to be used (that is, to *flow*) in a particular expression. For example, let's rewrite the above function to include a `default` parameter:
+
+```Rust
+fn first_or(Strings: &Vec<String>, default: &String) -> &String {
+    if strings.len() > 0 {      // requires R and F permissions
+        &strings[0]             // requires R and F permissions
+    }
+    else {
+        default                 // requires R and F permissions
+    }
+}
+```
+
+This will not compile because `&strings[]` and `default` lack the necessary <span style="color:green; font-weight:bold;">F</span> permissions to be returned. Why?
+
+If Rust *just* looks at the function signature, it doesn't know whether the output `&String` is a reference to `strings` or to `default`. Say we tried to used `first_or` like this:
+
+```Rust
+fn main() {
+    let strings = vec![];
+    let default = String::from("default");
+    let s = first_or(&strings, &default);
+    drop(default)
+    println!("{}", s);
+}
+```
+
+This program is unsafe if `first_or` allows `default` to *flow* into the return value, since the drop could invalidate `s`. Since from the function signature Rust cannot be certain something like this won't happen, `default` (and `&strings[]`) do not have <span style="color:green; font-weight:bold;">F</span> permissions.
+
+We *can* specify whether these input/output references can be returned and used... Rust provides a mechanism called *lifetime parameters* to help with validating in these cases.
