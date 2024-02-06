@@ -246,7 +246,18 @@ let s_len2 = s.len();      // implicit reference
 assert_eq!(s_len1, s_len2);
 ```
 
+Implicit conversion in this example is shown in three ways:
+1. calling the `i32::abs()` function with method-like (dot) syntax `x.abs()` instead of function-call syntax
+2. multiple layers of pointers are handled as in `r.abs()` where r is a reference to a box `r: &Box<i32>`
+3. works in the opposite direction.. `str::len()` expects a reference `&str`, so Rust inserts the reference with `s.len()`
+
+These conversions are handled with method calls and some marcros like `println!()`.
+
+This is a good summary of what references are and how they are used, but we should now discuss how Rust ensures they are safely used
+
 ### Rust Avoids Simultaneous Aliasing and Mutation
+
+
 ### References Change Permissions on Paths
 ### The Borrow Checker Finds Permission Violations
 ### Mutable References Provide Unique and Non-Owning Access to Data

@@ -9,7 +9,7 @@ This repository is meant to hold notes, exercises and projects created while lea
 # Run After Container is Built
 
 ## access token
-`export GITHUB_TOKEN=$PERSONAL_TOKEN_SECRET`
+`export GITHUB_TOKEN=$PERSONAL_ACCESS_TOKEN`
 
 ## rustlings submodule
 `cd rustlings`
