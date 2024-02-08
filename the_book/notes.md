@@ -421,6 +421,7 @@ We *can* specify whether these input/output references can be returned and used.
 Focus one of the answers to the question "is my program unsafe?"
     1. Yes --> understand the root cause of the unsafety
     2. No --> understand the limitations of the borrow checker to work around
+Rust will always reject an unsafe program, but will also sometimes reject a safe program
 
 ### UNSAFE: Returning a Reference to the Stack
 ```Rust
@@ -575,8 +576,124 @@ fn add_big_string(dst: &mut Vec<String>, src: &[String]) {
 - all solutions share the common idea: shorten the lifetime of borrows on `dst` to not overlap with a mutation to `dst`
 
 ### UNSAFE: Copying vs. Moving Out of a Collection
+```Rust
+// compiles
+fn main_1() {
+    let v: Vec<i32> = vec![0, 1, 2];
+    let n_ref: &i32 = &v[0];
+    let n: String = *n_ref;
+}
+
+// does not compile
+fn main_2() {
+    let v: Vec<String> = vec![String::from("Hello World!")];
+    let s_ref: &String = &v[0];
+    let s: String = *s_ref;
+}
+```
+
+In `main_1` the assignment of `n` is allowed because the path `*n_ref` only needs the <span style="color:yellow; font-weight:bold;">R</span>. However, in `main_2` the `*s_ref` path now needs *both* <span style="color:yellow; font-weight:bold;">R</span> and <span style="color:red; font-weight:bold;">O</span> permissions - this is because in this case the operation tries to pass ownership to `n`. We can't take ownership *through* a reference since they are non-owning pointers.
+
+The `String` vector example doesn't compile because the elements are themselves pointers to heap data. When we try to assign `s`, we end up with two pointers to the same heap data:
+
+![](notes_imgs/pointer_to_heap.png "copying vs. moving")
+
+Why is this unsafe? A **double-free** would occur here at the end of the scope... both `v` and `s` think they own "Hello World!" on the heap. When `s` is dropped it deallocates the string and then undefined behavior occurs when `v` is a dropped and the string is freed a second time.
+
+However, this undefined behavior does not occur when the vector contains `i32` elements. In technical terms Rust says that the type `i32` implements the `Copy` trait, while `String` does not. **If a value does not own heap data, then it can be copied without a move**:
+ - An `i32` *does not* own heap data, so it *can* be copied without a move
+ - A `String` *does* own heap data, so it *can not* be copied without a move
+ - An `&String` *does not* own heap data, so it *can* be copied without a move
+
+One exception to this rule is mutable references. For example `&mut i32` is not a copyable type:
+```Rust
+let mut m = 0;
+let a = &mut n;
+let b = a;
+```
+Then `a` cannot be used after being assigned to `b`.
+
+So in cases of non-`Copy` types like `String` we can safely access an element in a few different ways:
+    1. avoid taking ownership of the string and use an immutable reference:
+    ```Rust
+    let v: Vec<String> = vec![String::from("Hellow world")];
+    let s_ref: &String = &v[0];
+    println!("{s_ref}!");
+    ```
+    2. clone the data to get ownership of the string while leaving the vector alone:
+    ```Rust
+    let v: Vec<String> = vec![String::from("Hello world")];
+    let mut s: String = v[0].clone();
+    s.push('!');
+    println!("{s}");
+    ```
+    3. use a method like `Vec::remove` to move the string out of the vector:
+    ```Rust
+    let mut v: Vec<String> = vec![String::from("Hello world")];
+    let mut s: String = v.remove(0);
+    s.push('!');
+    println!("{s}");
+    assert!(v.len() == 0);
+    ```
 
 ### SAFE: Mutating Different Tuple Fields
+Rust may also reject safe programs - one common issue is that Rust tries to track permissions at a fine-grained level, but may conflate two separate paths as the same path.
+
+First let's look at an example that passes the borrow checker:
+
+![](notes_imgs/permissions_3.png "tuple permissions")
+
+`first` borrows the `name.0` element which removes <span style="color:blue; font-weight:bold;">W</span><span style="color:red; font-weight:bold;">O</span> permissions from both `name` (because, e.g. one could not pass `name` to a function that takes input of type `(String, String)`) and `name.0`. But `name.1` still retains the <span style="color:blue; font-weight:bold;">W</span> permissions, so `name.1.push_str(...)` is a valid operation.
+
+Now let's move to an example that does not compile:
+```Rust
+fn get_first(name: &(String, String)) -> &String {
+    &name.0
+}
+
+fn main() {
+    let mut name = (
+        String::from("Ferris"),
+        String::from("Rustacean")
+    );
+    let first = get_first(&name);
+    // W and O permissions removed from  
+    // name, name.0, AND name.1
+
+    name.1.push_str(", Esq.");
+    println!("{first} {}", name.1);
+}
+```
+Here the `name.1.push_str(...)` line becomes problematic. This is because Rust doesn't look at the implementation of `get_first` when deciding what `get_first(&name)` should borrow. The conservative choice is made to assume *both* tuple elements get borrowed and thus permissions are removed on both.
+
+The key idea is the program *is safe* in that there is no undefined behavior, but the way the borrow checkers works currently means we need a way to work around this situation. One possibility is to inline the expression `&name.0`. Another possibility is to defer borrow checking until runtime with [cells](https://doc.rust-lang.org/std/cell/index.html).
 
 ### SAFE: Mutating Different Array Elements
+A similar kind of problem can arise when we borrow array elements:
 
+![](notes_imgs/borrow_array_0.png "array permissions") ![](notes_imgs/borrow_array_1.png "array permissions")
+
+When we borrow an element of `a`, *all* elements, have their permissions altered because Rust does not contain different paths for `a[0]`, `a[1]` and so on.. it uses a single path `a[_]` to represent all indexes. This is why the assignment of `y` on the right fails and the program does not compile - <span style="color:yellow; font-weight:bold;">R</span> permissions are required, but `a[_]` is still being borrowed. 
+
+Again, **this program is safe** since we can see in this simple case no undefined behavior will occur. However, Rust behaves this way because it cannot always determine the value of an index:
+```Rust
+let idx = a_complex_function();
+let x = &mut a[idx];
+```
+What is the value of `idx`? Rust won't guess, so it assumes `idx` could be anything and thus all elements must be borrowed. For cases like these, Rust provides often provides a function in the standard library that can work around the borrow checker. We could use [`slice::split_at_mut`](https://doc.rust-lang.org/std/primitive.slice.html#method.split_at_mut):
+
+```Rust
+let mut a = [0, 1, 2, 3];
+let (a_l, a_r) = a.split_at_mut(2);
+let x = &mut a_l[1];
+let y = &a_r[0];
+*x += *y;
+```
+In some Rust libraries like `Vec` or `slice`, you will often find **`unsafe` blocks** which are blocks of code that allow the use of "raw" pointers. For example,
+```Rust
+let mut a = [0, 1, 2, 3];
+let x = &mut a[1] as *mut i32;
+let y - &a[2] as *const i32;
+unsafe { *x += *y; }        // DO NOT DO THIS unless you know what you're doing!
+```
+Unsafe code is sometimes necessary to work around the limitations of the borrow checker, but as a general strategy... if the borrow checker is rejecting a program you think is safe... look for a standard library function like `split_at_mut` that contain `unsafe` blocks which solve your problem. This is how Rust implements certain otherwise-impossible patterns.
