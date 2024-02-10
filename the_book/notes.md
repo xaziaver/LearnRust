@@ -8,7 +8,7 @@ Ownership is primarily a discipline of heap management:
  - Ownership can be transferred by moves, which happen on assignments and function calls.
  - Heap data can only be accessed through its current owner, not a previous owner.
 
-### What makes a Rust program safe/unsafe?
+### What makes a Rust program safe / unsafe?
 one way to think about safety is as the absence of undefined behavior
 ```rust 
 fn read(y: bool) {
@@ -27,7 +27,7 @@ fn main() {
 
  Rust's goal is to compile programs into efficient binaries that require as few runtime checks as possible. Therefore Rust does not check at runtime whether a variable is defined before being used. Instead, Rust checks at compile-time.
 
- ### What would happen if Rust allowed a rejected program to compile?
+### What would happen if Rust allowed a rejected program to compile?
 It would compile into something like the assembly code below.
 `read` expects `edi` to be a boolean, which is either 0 or 1. But `edi` could be anything
 at the time it is called (`2`, `100`, `0x1337BEEF`, ...) since the `mov` happens after
@@ -45,8 +45,8 @@ Some `behavior` **will happen, but it is `undefined`:
  - The code executes without crashing, until a malicious actor creates the right input to delete your 
    production database, overwrite your backups, or otherwise cause problems
 
-##
-## ***A foundational goal of Rust is to ensure that your programs never have undefined behavior.***
+
+***A foundational goal of Rust is to ensure that your programs never have undefined behavior.***
 
 About 70% of reported security vulnerabilities in low-level systems are caused by memory corruption, which is one form of undefined behavior.
 
@@ -614,20 +614,20 @@ let b = a;
 Then `a` cannot be used after being assigned to `b`.
 
 So in cases of non-`Copy` types like `String` we can safely access an element in a few different ways:
-    1. avoid taking ownership of the string and use an immutable reference:
+- avoid taking ownership of the string and use an immutable reference:
     ```Rust
     let v: Vec<String> = vec![String::from("Hellow world")];
     let s_ref: &String = &v[0];
     println!("{s_ref}!");
     ```
-    2. clone the data to get ownership of the string while leaving the vector alone:
+- clone the data to get ownership of the string while leaving the vector alone:
     ```Rust
     let v: Vec<String> = vec![String::from("Hello world")];
     let mut s: String = v[0].clone();
     s.push('!');
     println!("{s}");
     ```
-    3. use a method like `Vec::remove` to move the string out of the vector:
+- use a method like `Vec::remove` to move the string out of the vector:
     ```Rust
     let mut v: Vec<String> = vec![String::from("Hello world")];
     let mut s: String = v.remove(0);
@@ -697,3 +697,113 @@ let y - &a[2] as *const i32;
 unsafe { *x += *y; }        // DO NOT DO THIS unless you know what you're doing!
 ```
 Unsafe code is sometimes necessary to work around the limitations of the borrow checker, but as a general strategy... if the borrow checker is rejecting a program you think is safe... look for a standard library function like `split_at_mut` that contain `unsafe` blocks which solve your problem. This is how Rust implements certain otherwise-impossible patterns.
+
+
+##
+## <div align="center">The Slice Type</div>
+### Summary
+ - special kind of reference (non-owning pointer)
+ - allows you to reference a contiguous sequence of elements of a collection instead of the whole collection
+ - cannot be invalidated while its being used; borrowing rules apply & so stays connected to the collection it borrows from
+
+ ### Motivating example
+```Rust
+// program to return the first word of a string
+
+fn first_word(s: &String) -> usize {
+    let bytes = s.as_bytes();
+
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return i;
+        }
+    }
+
+    s.len()
+}
+
+fn main() {
+    let mut s = String::from("hello world");
+
+    let word = first_word(&s);
+    s.clear();
+}
+```
+
+If we didn't have a way to refer to a *part* of a string, we might do something like the above, finding the first space in the string and returning its index. This program compiles without any errors, but the problem is the return value stored in `word` is not connected to the state of `s` at all - when we use `s.clear()`, the value stored loses its meaning.
+
+Having to worry about the index in `word` getting out of sync with the data `s` is tedious and error prone.
+```Rust
+fn second_word(s: &String) -> (usize, usize) { ... }
+```
+and when we consider how we would find the second word that point becomes clear.
+
+### String Slices
+A *string slice*, `&str`, is a reference to part of a `String`. We create these slices by using the reference operator and range syntax like `&string_name[a..b]` to reference elements `a` (inclusive) to `b` (not inclusive). 
+
+![](notes_imgs/slices_0.png "string slice")
+
+We can see the internals in the diagram above... notice they are "fat pointers" (pointers w/ metadata)consisting of `ptr` - the pointer pointing to a portion of a string on the stack, and `len` - the length of the data being pointed to. This also shows you the internals of a `String`: a vector of bytes (`Vec<u8>`), which contains a length `len` and a buffer `buf` that has a pointer `ptr` and a capacity `cap`.
+
+Let's rewrite the example function using string slices:
+```Rust
+fn first_word(s: &String) -> &str {
+    let bytes = s.as_bytes();
+
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return &s[..i];
+        }
+    }
+
+    &s[..]
+}
+```
+Now we get back a single value that is tied to the underlying data - this will makes our API is much harder to mess up since the compiler will ensure references our slices will remain valid.
+
+### More info & other slices
+**range syntax**, `..`, allows you to omit the start and/or end of the range if you want to *start* with the first element or *end* with the last element. ***Note*** String slice ranges must occur at valid UTF-8 character boundaries... [more details](https://rust-book.cs.brown.edu/ch08-02-strings.html#storing-utf-8-encoded-text-with-strings)
+
+**String Literals** are slices:
+```Rust
+let s = "Hello, world!";
+```
+The type of `s` here is `&str`: it's a slice pointing to that specific point of the binary. This is also why string literals are immutable; `&str` is an immutable reference
+
+Knowing that you can take slices of string literals, we can improve our example futher:
+```Rust
+fn first_word(s: &str) -> &str {...}
+
+fn main() {
+    let my_string = String::from("hello world");
+
+    // `first_word` works on slices of `String`s, whether partial or whole
+    let word = first_word(&my_string[0..6]);
+    let word = first_word(&my_string[..]);
+    // `first_word` also works on references to `String`s, which are equivalent
+    // to whole slices of `String`s
+    let word = first_word(&my_string);
+
+    let my_string_literal = "hello world";
+
+    // `first_word` works on slices of string literals, whether partial or whole
+    let word = first_word(&my_string_literal[0..6]);
+    let word = first_word(&my_string_literal[..]);
+
+    // Because string literals *are* string slices already,
+    // this works too, without the slice syntax!
+    let word = first_word(my_string_literal);
+}
+```
+the `&str` parameter will work for both a slice of and a reference to a `String`. This flexibility takes advantage of *[deref coercions](https://rust-book.cs.brown.edu/ch15-02-deref.html#implicit-deref-coercions-with-functions-and-methods)*
+
+**Other slices** 
+there is a more general slice type:
+```Rust
+let a = [1, 2, 3, 4, 5];
+
+let slice = &a[1..3];
+
+assert_eq!(slice, &[2, 3]);
+``` 
+this slice has type `&[i32]` and works the same way as a string slice, storing a reference to the first element and a length. This kind of slice will work for all sorts of other collections as well.
