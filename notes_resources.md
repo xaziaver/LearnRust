@@ -1,3 +1,11 @@
+# Rust
+ - [rust-lang GitHub](https://github.com/rust-lang)
+ - [Rust reference](https://doc.rust-lang.org/stable/reference/)
+ - [Rust Standard Library documentation](https://doc.rust-lang.org/std/index.html)
+ - [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
+ - [The Cargo Book](https://doc.rust-lang.org/cargo/index.html)
+ - [crates.io](https://crates.io/)
+
 # git & GitHub
 
 ## common `git` commands
