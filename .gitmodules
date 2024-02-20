@@ -1,3 +1,6 @@
 [submodule "rustlings"]
     path = rustlings
     url = https://github.com/xaziaver/rustlings.git
+[submodule "Rust_LLMTokenizer"]
+	path = Rust_LLMTokenizer
+	url = https://github.com/xaziaver/Rust_LLMTokenizer.git
