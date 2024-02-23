@@ -70,6 +70,9 @@ interactive tutorials to learn GitHub
 
 ***[GitHub API Documentation](https://docs.github.com/en/rest)***
 
+***[git-bisect](https://git-scm.com/docs/git-bisect)
+command that does a binary search for a commit that caused the project to go from "good" to "bad"
+
 
 # Markdown
 
